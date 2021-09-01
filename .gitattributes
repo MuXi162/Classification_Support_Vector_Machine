@@ -1,2 +1,2 @@
-* linquist-vendored
-*.Rmd linguist-vendored=false
+linquist-vendored
+.Rmd linguist-vendored=false
