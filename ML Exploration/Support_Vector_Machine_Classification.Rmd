@@ -1,0 +1,124 @@
+---
+title: "Credit Card Data - Support Vector Machine Classification"
+author: "John Dockter"
+date: "August 26, 2019"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r import libraries}
+#import libraries and load data
+#install.packages("kknn")
+library(kernlab)
+library(kknn)
+
+#set directory
+#setwd(choose.dir())
+
+#load data and read the headers
+credit_data <- read.table("credit_card_data.txt", header=FALSE, stringsAsFactors = FALSE)
+head(credit_data)
+```
+
+The files credit_card_data.txt (without headers) and credit_card_data-headers.txt (with headers) contain a dataset with 654 data points, 6 continuous and 4 binary predictor variables.  It has anonymized credit card applications with a binary response variable (last column) indicating if the application was positive or negative. The dataset is the “Credit Approval Data Set” from the UCI Machine Learning Repository (https://archive.ics.uci.edu/ml/datasets/Credit+Approval) without the categorical variables and without data points that have missing values. 
+ 
+1. Using the support vector machine function ksvm contained in the R package kernlab, find a good classifier for this data. Show the equation of your classifier, and how well it classifies the data points in the full data set.  
+
+2. Try another (nonlinear) kernel and share your results.
+
+3. Using the k-nearest-neighbors classification function kknn contained in the R kknn package, suggest a good value of k, and show how well it classifies that data points in the full data set.  Don’t forget to scale the data (scale=TRUE in kknn). 
+
+
+
+
+```{r Q1}
+#Q1
+#arrange model and display
+model <- ksvm(as.matrix(credit_data[,1:10]),as.factor(credit_data[,11]), type = "C-svc", kernel = "vanilladot", C = 100, scaled = TRUE) 
+model
+```
+
+```{r calc a1...am}
+#calculate a1...am and display
+a <- colSums(model@xmatrix[[1]]* model@coef[[1]])
+a
+```
+
+```{r calc a0}
+#calculate a0 and display
+a0 <- -model@b
+a0
+```
+
+```{r model pred}
+#model predictions
+pred <- predict(model,credit_data[,1:10])
+pred
+```
+
+```{r model acc}
+#fraction of model's pred match the actual classification
+sum(pred==credit_data[,11]) / nrow(credit_data)
+```
+**Answer:** When using a classifier of 100, the models accuracy is **86.39%**.
+
+
+```{r Q2}
+#Q2
+#model2 to show for non-linear kernel
+#Using "rbfdot" Radial Basis kernel function "Gaussian"
+model2 <- ksvm(as.matrix(credit_data[,1:10]),as.factor(credit_data[,11]), type = "C-svc", kernel = "rbfdot", C = 100, scaled = TRUE) 
+model2
+```
+
+```{r model2 pred}
+#model2 predictions
+pred2 <- predict(model2,credit_data[,1:10])
+pred2
+```
+
+```{r model2 acc}
+#fraction of model2's pred match the actual classification
+sum(pred2==credit_data[,11]) / nrow(credit_data)
+```
+**Answer:** When changing the kernel from vanilladot to rbfdot and using a classifier of 100, I was able to identify the new model's accuracy of **95.26%**. 
+
+```{r Q3}
+#Q3
+#function to verify accuracy that does not include i itself
+ver_check = function(Z){
+  pred<- rep(0,(nrow(credit_data)))
+  
+  for (i in 1:nrow(credit_data)){
+    kknn_model = kknn(V11~V1+V2+V3+V4+V5+V6+V7+V8+V9+V10,credit_data[-i,],credit_data[i,], k=Z, scale=TRUE)
+    pred[i] <- as.integer(fitted(kknn_model)+0.5)
+  }
+  
+  verify = sum(pred==credit_data[,11]) / nrow(credit_data)
+  return(verify)
+}
+
+vect_check <- rep(0,30)
+  for(Z in 1:30){
+    vect_check[Z] = ver_check(Z)
+  }
+```
+
+```{r accuracy}
+accuracy <- as.matrix(vect_check*100)
+accuracy
+```
+
+```{r assign and plot}
+kknn_value <- c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30)
+
+plot(kknn_value,vect_check)
+```
+
+```{r max_acc}
+max(accuracy)
+```
+
+**Answer:** We can see the most accurate classifiers are 12 and 15 with an accuracy of **85.32%**. 
