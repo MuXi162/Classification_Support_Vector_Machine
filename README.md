@@ -1,5 +1,9 @@
 # Classification_Support_Vector_Machine
 
+credit_card_data.txt -> The dataset <br>
+Support_Vector_Machine_Classification.RMD -> The R-markdown containing the code <br>
+Support_Vecotr_Machine_Classification.HTML -> The results that can be displayed in a web browser <br>
+
 Using the support vector machine function ksvm contained in the R package kernlab, find a good classifier for this data. Show the equation of your classifier, and how well it classifies the data points in the full data set.  (This does not provide insight for test/validation data yet; we’ll cover that topic soon.)
 
 Notes on ksvm <br>
