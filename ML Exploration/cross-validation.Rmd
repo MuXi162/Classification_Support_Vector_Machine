@@ -1,0 +1,206 @@
+---
+title: "ML - Cross-Validation"
+author: "John Dockter"
+date: "September 4, 2019"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## 1)
+Use the ksvm or kknn function to find a good classifier:
+(a) Use cross-validation for the k-nearest-neighbors model and
+(b) splitting the data into training, validation, and test data sets.
+
+I found a Youtube video from StatQuest with Josh Starmer, that had a pretty good explanation of machine learning and cross-validation: https://youtu.be/fSytzGwwBVw 
+
+### 1.A)
+```{r set library, directory and establish data}
+#Install and set library for kknn
+#install.packages("kknn")
+library(kknn)
+
+#set directory
+#setwd(choose.dir())
+
+#create variable for data table and read the head of it
+credit_data <- read.table("credit_card_data.txt", header=FALSE, stringsAsFactors = FALSE)
+head(credit_data)
+
+```
+Looking at the KKNN package, we see that there is actually a function inside it related to crossvalidation, known as train.kknn. According to the description from the Help section, "Training of kknn method via leave-one-out (train.kknn) or k-fold (cv.kknn) crossvalidation." The further details reveal that train.kknn is computationally very efficient, while cv.kknn is generally slower and does not contain the test of different models yet. Knowing this, let's try working with train.kknn to help in answering question 1.A. 
+
+```{r train.kknn}
+#setting the seed so results can be reproduced in the future
+set.seed(1)
+
+#setting the max value of k to test
+kmax <- 30
+
+#creating the actual model 
+model <- train.kknn(V11~.,credit_data, kmax=kmax, scale=TRUE)
+
+#prediction qualities array
+acc <- rep(0,kmax)
+
+#prediction qualities calculations
+
+for (k in 1:kmax) {
+  prediction <- as.integer(fitted(model)[[k]][1:nrow(credit_data)]+0.5)
+  acc[k] <- sum(prediction == credit_data$V11)
+}
+
+#show accuracy
+acc
+```
+```{r Plot acc}
+#plot the table
+plot(acc)
+```
+
+### Response 1.A)
+From both the table and plot above, we can see that when k is less than 5, the results are much lower than the rest of the k values. We can see a good accuracy portion for when k is between 10 and 20. 
+
+### 1.B) 
+
+From the explanation in the youtube video I referenced above, I would try to split the data into 75% for training and the remaining 25% for testing. However, in our case here, we need to split the data into three groups, training, validation and testing. Knowing we should use half or more of the data towards training, I will allocate 60% for training, 20% for validation and the remaining 20% for testing. Since I have previously loaded KKNN package, I plan to continue moving forward with that to find a solution to part 1.B.
+
+```{r split data}
+#first need to split the data into the three sets
+#60% for training
+train_sample = sample(nrow(credit_data), size = floor(nrow(credit_data)*.6))
+train_data = credit_data[train_sample,]
+
+#20% for testing and 20% for validation; other 40% of data
+other_data = credit_data[-train_sample, ]
+
+#split the 40% in half to allocate 20% for testing and 20% for validation
+other_sample = sample(nrow(other_data), size = floor(nrow(other_data)/2))
+
+val_data = other_data[other_sample,]
+test_data = other_data[-other_sample, ]
+
+best <- rep(0,29)
+```
+
+```{r train KKNN Model}
+#create loop to go through the model for each k value
+for (k in 1:29) {
+  #create the model to process training data
+  kknn_model <- kknn(V11~., train_data, val_data, k=k, scale=TRUE)
+  #create variable to show for the prediction
+  pred <- as.integer(fitted(kknn_model)+0.5)
+  best[k] = sum(pred == val_data$V11) / nrow(val_data)
+}
+
+best[1:29]
+
+cat("Best train KKNN model is k =", which.max(best[1:29]), "\n")
+cat("Best train validation set correctness is", max(best[1:29]), "\n")
+```
+
+```{r test KKNN Model}
+#create model to process testing data
+kknn_model <- kknn(V11~., train_data, test_data, k=which.max(best[0:29]), scale=TRUE)
+
+pred <- as.integer(fitted(kknn_model)+0.5)
+
+cat("Performance on test data = ", sum(pred == test_data$V11) / nrow(test_data), "\n")
+```
+
+### Response 1.B) 
+From the KKNN Models above, we can see that setting k = 11 will provide a test performance of 0.7938931. 
+
+## 2)
+
+The iris data set iris.txt contains 150 data points, each with four predictor variables and one
+categorical response. The predictors are the width and length of the sepal and petal of flowers and the response is the type of flower. The data is available from the R library datasets and can be accessed with iris once the library is loaded. It is also available at the UCI Machine Learning Repository (https://archive.ics.uci.edu/ml/datasets/Iris ). I'll be using the R function kmeans to cluster the points as well as possible. Reporting the best combination of predictors, suggested value of k, and how well the best clustering predicts flower type.
+
+```{r import and verify iris data}
+#create variable for iris data table and read the head of it
+iris_data = read.table("iris.txt", header=TRUE, stringsAsFactors = FALSE)
+head(iris_data)
+```
+```{r species count}
+#table that shows the counts for each species in the data
+table(iris_data[,5], iris_data$Species)
+```
+
+```{r import and plot with GGPLOT}
+#install.packages("ggplot2")
+library(ggplot2)
+#plot for sepal length and width
+ggplot(iris_data, aes(Sepal.Length, Sepal.Width, color = Species)) + geom_point()
+```
+The sepal based plot above shows some good clustering for the Setosa species but for the versicolor and virginica, it appears to be a mixture of the two. 
+
+```{r plot petal length and width}
+#plot for petal length and width
+ggplot(iris_data, aes(Petal.Length, Petal.Width, color = Species)) + geom_point()
+```
+The petal based plot above shows a similar finding as the sepal based plot, the Setosa species is clearly defined but the versicolor and virginica have quite a bit of overlap but not as bad as the sepal plot. 
+
+Now that we have had a chance to explore some of the Iris data and see the breakdown of the species counts, lets see how kmeans clusters the data. Knowing at this point, there are only 3 species involved, we can assume k=3 to be a good cluster number. Just for emphasis on how clusters affect clustering points, I plan to explore some additional cluster numbers.  
+
+```{r kmeans -- cluster variables}
+#create 4 clusters of the original data minus the species column
+iriscluster1 <- kmeans(iris_data[,1:4], 2)
+iriscluster2 <- kmeans(iris_data[,1:4], 3)
+iriscluster3 <- kmeans(iris_data[,1:4], 4)
+iriscluster4 <- kmeans(iris_data[,1:4], 5)
+
+#set distance to 0
+
+sum = 0
+
+#for loop to review each data point
+for(i in 1:nrow(iris_data)){
+  #add the distance between point and cluster center
+  
+  sum = sum +dist(rbind(iris_data[i,1:4],iriscluster1$centers[iriscluster1$cluster[i],]))
+}
+#total
+sum[1]
+```
+```{r comparison data tables}
+#compare cluster data to species 
+table(iriscluster1$cluster, iris_data$Species)
+table(iriscluster2$cluster, iris_data$Species)
+table(iriscluster3$cluster, iris_data$Species)
+table(iriscluster4$cluster, iris_data$Species)
+
+
+
+```
+```{r cluster1}
+#cluster1 kmeans results
+iriscluster1
+```
+```{r cluster2}
+#cluster2 results
+iriscluster2
+```
+```{r cluster3}
+#cluster3 results
+iriscluster3
+```
+```{r cluster4}
+#cluster4 results
+iriscluster4
+```
+
+```{r plot sepal data with cluster2 color}
+#plot for sepal length and width, cluster2 color
+ggplot(iris_data, aes(Sepal.Length, Sepal.Width, color = iriscluster2$cluster)) + geom_point()
+```
+
+```{r plot petal data with cluster2 color}
+#plot for petal length and width, cluster2 color
+ggplot(iris_data, aes(Petal.Length, Petal.Width, color = iriscluster2$cluster)) + geom_point()
+```
+
+### Response 2)
+Best combination of predictors: **Petal Width and Length** <br/>
+Suggested value of k: **3** <br/>
+How well your best clustering predicts flower type: **88.4%**
