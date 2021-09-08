@@ -1,0 +1,120 @@
+---
+title: "Principal Component Analysis - Model Predictor Selection"
+author: "John Dockter"
+date: "October 3, 2019"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+```{r}
+# As best practice, setting the random number generator seed so that the results are reproducible
+set.seed(1)
+```
+
+## Principal Component Analysis
+
+Using the same crime data set uscrime.txt as in the Regression Based Prediction Model example, we will apply Principal Component Analysis and then create a regression model using the first few principal components. We will specify our new model in
+terms of the original variables (not the principal components), and compare its quality to that of the previous example. We will use the R function prcomp for PCA. Note that to first scale the data, we will include scale. = TRUE to scale as part of the PCA function. Also, don’t forget, to make a prediction for the new city, we will need to unscale the coefficients to get our final results.
+
+```{r Set directory and import data}
+#set directory
+#setwd(choose.dir())
+
+#load data and read the headers
+crime_data <- read.table("uscrime.txt", header=TRUE)
+head(crime_data)
+```
+
+Taking a look at the source of the data (http://www.statsci.org/data/general/uscrime.html), we have definitions for the variables listed in the table above: 
+
+**Variable	 	Description**
+
+* M - Percentage of males aged 14–24 in total state population
+* So - Indicator variable for a southern state
+* Ed	- Mean years of schooling of the population aged 25 years or over
+* Po1 - Per capita expenditure on police protection in 1960
+* Po2 - Per capita expenditure on police protection in 1959
+* LF - Labour force participation rate of civilian urban males in the age-group 14-24
+* M.F - Number of males per 100 females
+* Pop - State population in 1960 in hundred thousands
+* NW - Percentage of nonwhites in the population
+* U1 - Unemployment rate of urban males 14–24
+* U2 - Unemployment rate of urban males 35–39
+* Wealth - Wealth: median value of transferable assets or family income
+* Ineq - Income inequality: percentage of families earning below half the median income
+* Prob - Probability of imprisonment: ratio of number of commitments to number of offenses
+* Time - Average time in months served by offenders in state prisons before their first release
+* Crime - Crime rate: number of offenses per 100,000 population in 1960
+
+
+Now that we've confirmed the correct data, we will begin to explore the data, apply Principal Component Analysis and then create a regression model using the first few principal components.
+
+Using the R function prcomp, we can explore the importance of the components.
+```{r PRCOMP}
+prc <- prcomp(crime_data[,-16], scale = T)
+summary(prc)
+```
+
+Viewing the summary above, we can see that the first three principal components have a significantly larger amount of variation compared to the remaining twelve components. We can now try to calculate the proportion of variance, we first find the eigenvalues and square the standard deviation and save as a variable (variance). Then we can divide the variance variable by the sum of the variance variable to provide a Proportion of Variance VS Principal Component plot. 
+
+```{r proportion of variance}
+#create variable for variance 
+variance <- prc$sdev^2
+#create variable for proportion
+proportion <- variance/ sum(variance)
+#create plot of proportion of variance vs pc components
+plot(proportion, main = "Proportion of Variance VS Principal Components", xlab = "Principal Components", ylab = "Proportion of Variance", type = "b", col="blue")
+```
+
+In attempt to understand what the Proportion of Variance VS Principal Components information above can really show, we can use a Scree Plot (screeplot.default plots the variances against the number of the principal component. This is also the plot method for classes "princomp" and "prcomp".) along with utilizing the Kaiser method (The Kaiser rule is to drop all components with eigenvalues under 1.0 – this being the eigenvalue equal to the information accounted for by an average single item.) to identify principal components to keep for our model. 
+
+```{r screeplot}
+#scree plot of prc data
+screeplot(prc, main= "Scree Plot", type = "line")
+#insert red line for threshold of 1
+abline(h=1, col="red")
+```
+
+From the Scree Plot above, we could suggest that the first 5 Principal Components would be the best to include in the model. So we can assign a variable (pc) for the number of Principal Components we will use, we will then need to combine the prc components with the original crime data set. This combined dataset can now be used to build our linear regression model. By assigning a variable to generate the new linear regression model, ideally, it reduces the complexity of the model while making it stronger.
+
+```{r new model}
+#assign variable for number of principal components
+pc = 5
+#create combined data set
+pc_crime_data <- cbind(prc$x[,1:pc], crime_data[,16])
+#new regression model with combined data set
+model <- lm(V6~., data = as.data.frame(pc_crime_data))
+#summary of new model
+summary(model)
+#plot of new model
+plot(model)
+```
+
+Now that the model LM summary of the combined data has been run, we want to predict the crime rate based on the given test variables provided at the beginning. To do this, we must first place the variables into a dataframe. 
+
+```{r test df}
+test <- data.frame(M = 14.0, So = 0, Ed = 10.0, Po1 = 12.0, Po2 = 15.5, LF = 0.640, M.F = 94.0, Pop = 150, NW = 1.1, U1 = 0.120, U2 = 3.6, Wealth = 3200, Ineq = 20.1, Prob = 0.040, Time = 39.0)
+```
+
+Next, we will apply the prc variable data with the recently assigned test dataframe so we can apply our model and make our prediction.
+
+```{r predict model}
+#apply prc variable to test data frame
+prediction_dataframe <- data.frame(predict(prc, test))
+#predict crime rate with new data
+prediction <-predict(model, prediction_dataframe)
+prediction
+```
+
+```{r range of crime}
+range(crime_data["Crime"])
+```
+
+## Conclusion of PCA Analysis for Regression Based Prediction Model
+
+This new prediction of about 1389, still falls within the range of our crime category and can be considered a valid prediction. To confirm our prediction accuracy, we can view the summary details from earlier showing the R-Squared value of 0.6452 and Adjusted R-Squared value of 0.6019. 
+
+In comparison to my results from last weeks assignment, Prediction = 1304 with prediction accuracies of R-Squared value of 0.7659 and Adjusted R-Squared value of 0.7307, we now have a Prediction = 1389 with prediction accuracies of R-Squared value of 0.6452 and Adjusted R-Squared value of 0.6019. We can see that this week's prediction appears to be slightly less sufficient at prescribing values. However, we can also account for the fact the data provided was a very small sample size, but with using a PCA Model, we were able to deliver nearly the same accuracy with several less predictors. 
+
