@@ -1,5 +1,5 @@
 ---
-title: "Regression based Prediction Model"
+title: "Regression Based Prediction Model"
 author: "John Dockter"
 date: "September 26, 2019"
 output:
@@ -13,7 +13,7 @@ output:
 set.seed(1)
 ```
 
-#Regression Prediciton Model for Crime in a City
+#Regression Prediction Model for Crime in a City
 
 ## Context of data explored
 Using crime data from http://www.statsci.org/data/general/uscrime.txt (file uscrime.txt,
