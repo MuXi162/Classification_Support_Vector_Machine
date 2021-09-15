@@ -1,0 +1,247 @@
+---
+title: "Missing Data Imputation Methods - Breast-Cancer Data Exploration"
+author: "John Dockter"
+date: "October 31, 2019"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+---
+```{r}
+# As best practice, setting the random number generator seed so that the results are reproducible
+set.seed(1)
+```
+# Missing Data Imputation Methods - Breast-Cancer Data Exploration
+
+The breast cancer data set breast-cancer-wisconsin.data.txt from
+http://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/ (description at
+http://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Original%29 ) has missing values. To account for the missing data, we will explore three different ways to impute figures:
+
+1. We will use the mean/mode imputation method to impute values for the missing data
+
+2. We will use regression to impute values for the missing data
+
+3. We will Use regression with perturbation to impute values for the missing data
+
+After building our models, we will compare the results and quality of the classification models (e.g., SVM, KNN) build using (1) the data sets created with the three imputation methods 1,2,3; (2) the data that remains after data points with missing values are removed; and (3) the data set when a binary variable is introduced to indicate missing values.
+
+
+
+## Initial Dataset Observations
+
+Before diving into the analysis, let's see what kind of data we will be working with. From the source, we see several attributes for each of the columns. 
+
+Attribute Information:
+
+1. Sample code number: id number
+2. Clump Thickness: 1 - 10
+3. Uniformity of Cell Size: 1 - 10
+4. Uniformity of Cell Shape: 1 - 10
+5. Marginal Adhesion: 1 - 10
+6. Single Epithelial Cell Size: 1 - 10
+7. Bare Nuclei: 1 - 10
+8. Bland Chromatin: 1 - 10
+9. Normal Nucleoli: 1 - 10
+10. Mitoses: 1 - 10
+11. Class: (2 for benign, 4 for malignant)
+
+
+
+```{r Set directory and import data}
+#set directory
+#setwd(choose.dir())
+
+#load data and read the headers
+cancer_data <- read.table("breast-cancer-wisconsin.data.txt", stringsAsFactors = FALSE, header=FALSE, sep=",")
+head(cancer_data)
+
+```
+
+Now that we have checked that our data has loaded correctly, we need to identify any missing values in the data set. We can use a quick for loop to iterate over the table and designate a value for any field with a missing value in it. 
+
+```{r find missing data}
+for (i in 2:11) {
+  print(paste0("v", i))
+  print(table(cancer_data[,i]))
+}
+```
+
+We see a question mark under a value fo v7 so we know we can query for that symbol within the range of the data on v7. 
+
+```{r observations with missing data}
+#query to pull any observations with column v7 result of "?"  
+cancer_data[which(cancer_data$V7 == "?"),]
+```
+
+We have identified the observations that have missing data, so now we can look at the percentage of observations with missing data compared to the whole data set. We know in order to proceed with the analysis, we must find that the missing data is less than 5% of the total data set in order to use data imputation. 
+
+```{r missing data percentage}
+nrow(cancer_data[which(cancer_data$V7 == "?"),])/nrow(cancer_data)
+```
+
+Since this is less than 5%, we can continue moving forward. Let's assign the identified observations with missing data to a variable 
+
+```{r missing data variable}
+missing <- which(cancer_data$V7 == "?", arr.ind=TRUE)
+missing
+```
+
+## 1) Mean/Mode Imputation Method
+
+In this section, we will use the mean/mode imputation method to impute values for the missing data.
+
+Since V7 is a categorical variable, we can use mode imputation. Since there is no package that contains a function for mode within R, we will need to create one ourselves. 
+
+```{r create function for mode}
+#assign a variable for the function 
+mode <- function(v) {
+  uniq <- unique(v)
+  #identify the maximum unique value in a selected column
+  uniq[which.max(tabulate(match(v, uniq)))]
+}
+```
+
+With the mode function available now, we can run it on column V7.
+
+```{r V7 mode}
+#assign a variable to run the mode function on column 7
+mode_V7 <- as.numeric(mode(cancer_data[-missing, "V7"]))
+mode_V7
+```
+
+The mode returned with the value of 1. We will now impute V7 observations with missing data to mode_V7.
+
+```{r impute V7}
+#Impute V7 with the values from mode_V7
+#Creating duplicate of original dataset 
+mode_imp <- cancer_data
+#Imputing values from mode_V7 to column V7 in duplicate dataset
+mode_imp[missing,]$V7 <- mode_V7
+#Adjusting column value to an integer 
+mode_imp$V7 <- as.integer(mode_imp$V7)
+
+#Test to make sure the table took the changes
+mode_imp[which(mode_imp$V7 == "?"),]
+```
+
+## Regression Imputation Method
+
+In this section, we will use regression to impute values for the missing data.
+
+We can start this by assigning the original data to a new variable name and exclude the response variable. 
+
+```{r create data variable for regression;exclude response variable}
+#create new data variable to run regression models on without impacting original data
+reg_data <- cancer_data[-missing,2:10]
+reg_data$V7 <- as.integer(reg_data$V7)
+```
+
+Now we should create a linear model that uses the remaining factors as predictors.
+
+```{r lm model}
+#lm model with factors as predictors
+model1 <- lm(V7~ V2+V3+V4+V5+V6+V8+V9+V10, data = reg_data)
+summary(model1)
+
+#backwards stepwise regression to select significant predictors
+step(model1)
+```
+
+The final results from the backwards stepwise regression show that the significant predictors are V2, V4, V5, and V8. We will now build a second model with the significant predictors. 
+
+```{r stepwise regression recommended model}
+#stepwise regression recommended model
+model2 <- lm(V7~V2+V4+V5+V8, data = reg_data)
+summary(model2)
+```
+
+The summary of the second model above shows that the remaining predictors are all significant. We should now cross-validate our model to test for it's accuracy.
+
+
+```{r cross validate the second model}
+#import DAAG library for cross-validation
+library(DAAG)
+
+
+cv_model <- cv.lm(reg_data, model2, m=5)
+SST <- sum((as.numeric(cancer_data[-missing,]$V7)- mean(as.numeric(cancer_data[-missing,]$V7)))^2)
+R2 <- 1 - attr(cv_model, "ms")*nrow(cancer_data[-missing,])/SST
+R2
+```
+
+We now need predictions for the missing V7 values. 
+
+```{r V7 value predictions}
+#prediction values for V7
+V7_predictions <- predict(model2, newdata = cancer_data[missing,])
+```
+
+And with the predictions we will impute V7 for observations with missing data for the predicted values. 
+
+```{r impute V7 with predicted V7 values; linear model}
+#
+reg_imp <- cancer_data
+reg_imp[missing,]$V7 <- V7_predictions
+reg_imp$V7 <- as.numeric(reg_imp$V7)
+
+#Round the prediction values
+reg_imp[missing,]$V7 <- round(V7_predictions)
+reg_imp$V7 <- as.integer(reg_imp$V7)
+
+#set threshold range and bring values that are over or under into threshold
+reg_imp$V7[reg_imp$V7 > 10] <- 10
+reg_imp$V7[reg_imp$V7 < 1] <- 1
+
+#test to make sure the table took the changes
+reg_imp[which(reg_imp$V7 == "?"),]
+
+#display the full data frame with the predicted values imputed
+reg_imp
+```
+
+## Regression with Perturbation Imputation Method
+
+In this section, we will use regression with perturbation to impute values for the missing data.
+
+We need to perturb the predictions for missing values in column V7 with a random normal distribution. The predicted values will be the means the standard deviation will be the standard deviation of the predicted values. 
+
+```{r perturbation of predicted values}
+V7_predictions_pert <- rnorm(nrow(cancer_data[missing,]), V7_predictions, sd(V7_predictions))
+V7_predictions_pert
+```
+
+```{r}
+#create new data variable to run regression models on without impacting original data
+reg_pert_imp <- cancer_data
+reg_pert_imp[missing,]$V7 <- V7_predictions_pert
+reg_pert_imp$V7 <- as.numeric(reg_pert_imp$V7)
+
+#round the pert prediction values 
+reg_pert_imp[missing,]$V7 <- round(V7_predictions_pert)
+reg_pert_imp$V7 <- as.integer(reg_pert_imp$V7)
+
+#set threshold range and bring values that are over or under into threshold
+reg_pert_imp$V7[reg_pert_imp$V7 > 10] <- 10
+reg_pert_imp$V7[reg_pert_imp$V7 < 1] <- 1
+
+#test to make sure the table took the changes
+reg_pert_imp[which(reg_pert_imp$V7 == "?"),]
+
+#display the full data frame with the predicted values imputed
+reg_pert_imp
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
